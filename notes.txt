@@ -2,3 +2,31 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManage
 
 choco --version
 choco install mremoteng -y
+
+2. Quick-configure WinRM with defaults
+powershellwinrm quickconfig
+This starts the WinRM service, sets it to auto-start, and creates a default HTTP listener on port 5985. Answer y to the prompts.
+3. Create / verify the HTTP listener (port 5985)
+powershellwinrm enumerate winrm/config/listener
+If no HTTP listener exists, create one explicitly:
+powershellwinrm create winrm/config/Listener?Address=*+Transport=HTTP
+4. Enable Basic authentication (Aria Orchestrator commonly uses this)
+powershellwinrm set winrm/config/service/auth '@{Basic="true"}'
+winrm set winrm/config/service '@{AllowUnencrypted="true"}'
+winrm set winrm/config/client/auth '@{Basic="true"}'
+Note: AllowUnencrypted=true is required for Basic auth over HTTP. If your security policy disallows this, use Kerberos instead, or set up HTTPS (port 5986) with a certificate.
+5. Enable Kerberos (recommended if the host is domain-joined)
+powershellwinrm set winrm/config/service/auth '@{Kerberos="true"}'
+6. Increase memory limit (Aria Orchestrator workflows often need more)
+powershellwinrm set winrm/config/winrs '@{MaxMemoryPerShellMB="1024"}'
+7. Open the firewall for port 5985
+powershellNew-NetFirewallRule -DisplayName "WinRM-HTTP" -Direction Inbound -LocalPort 5985 -Protocol TCP -Action Allow
+Or via the built-in rule:
+powershellEnable-NetFirewallRule -Name "WINRM-HTTP-In-TCP"
+8. Set PowerShell execution policy so Orchestrator scripts can run
+powershellSet-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force
+9. Verify the configuration
+powershellwinrm get winrm/config
+Look for Service > Auth > Basic = true and a listener on port 5985.
+10. Test the connection from another machine
+powershellTest-WSMan -ComputerName <hostname> -Port 5985
